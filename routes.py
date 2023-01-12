@@ -27,17 +27,20 @@ def exists(item, playlist):
 #renders the home.html template providing the list of current users
 @app.route('/profiles')
 def profiles():
-    current_users = [] #change here to a database query
+    current_users = User.query.all() #arrange saving in db
     return render_template('users.html', current_users = current_users)
 
 #Displays profile pages for a user with the user_id primary key
 #renders the profile.html template for a specific user, song library and 
 #the user's playlist 
+
+
+
 @app.route('/profile/<int:user_id>')
 def profile(user_id):
    user = User.query.filter_by(id = user_id).first_or_404(description = "No such user found.")
    songs = Song.query.all()
-   my_playlist = None #change here to a database query
+   my_playlist = Playlist.query.get(user.playlist_id)#None #change here to a database query #step 17
    return render_template('profile.html', user = user, songs = songs, my_playlist = my_playlist)
 
 #Adds new songs to a user's playlist from the song library
@@ -50,8 +53,11 @@ def add_item(user_id, song_id, playlist_id):
    if not exists(new_item, my_playlist.items):
       song = Song.query.get(song_id)
       #using db session add the new item
-      #increase the counter for the song associated with the new item
+      db.session.add(new_item)
+      #increase the counter for the song associated with the new item - counter can tell how popular is a song
+      song.n = song.n + 1
       #commit the database changes here
+      db.session.commit()
    return redirect(url_for('profile', user_id = user_id))
 
 #Remove an item from a user's playlist
@@ -59,22 +65,31 @@ def add_item(user_id, song_id, playlist_id):
 @app.route('/remove_item/<int:user_id>/<int:item_id>')
 def remove_item(user_id, item_id):
    #from the Item model, fetch the item with primary key item_id to be deleted
+   object_to_remove = Item.query.get(item_id)
    #using db.session delete the item
+   db.session.delete(object_to_remove)
    #commit the deletion
+   db.session.commit()
    return redirect(url_for('profile', user_id = user_id))
-   
 #Display the Dashboard page with a form for adding songs
 #Renders the dashboard template
 @app.route('/dashboard', methods=["GET", "POST"])
 def dashboard():
-  form = SongForm()
-  if request.method == 'POST' and form.validate():
-    new_song = None
+  form = SongForm(csrf_enabled=False)
+  # updated to csrf_enabled
+  if request.method == 'POST' and form.validate_on_submit():
+    #new_song = None
     #create a new song here
+    new_song = Song(title = form.title.data, artist = form.artist.data, n=1)
     #add it to the database
+    db.session.add(new_song)
     #commit to the database
+    db.session.commit()
   else:
         flash(form.errors)
   unpopular_songs = []  #add the ordering query here
+  sorted_entries = Song.query.order_by(Song.n)
+  top_3 = sorted_entries[:3]
+
   songs = Song.query.all()
   return render_template('dashboard.html', songs = songs, unpopular_songs = unpopular_songs, form = form)
